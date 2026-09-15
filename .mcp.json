@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grok-clawbot": {
+      "command": "node",
+      "args": ["server/index.js"]
+    }
+  }
+}

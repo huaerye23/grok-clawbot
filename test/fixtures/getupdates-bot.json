@@ -1,0 +1,13 @@
+{
+  "ret": 0,
+  "get_updates_buf": "cursor-bot",
+  "msgs": [
+    {
+      "from_user_id": "2a4d413230a5@im.bot",
+      "message_type": 2,
+      "message_state": 2,
+      "context_token": "AARzJWAF-bot",
+      "item_list": [{ "type": 1, "text_item": { "text": "bot echo" } }]
+    }
+  ]
+}

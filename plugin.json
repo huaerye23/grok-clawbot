@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "grok-clawbot",
+  "description": "Grok Bot 插件：通过官方 ClawBot / iLink 绑定个人微信。扫码登录、私信收发、status、logout。入站经 webhook 唤醒。",
+  "version": "1.0.0",
+  "author": {
+    "name": "grok-clawbot"
+  },
+  "keywords": ["wechat", "weixin", "ilink", "clawbot", "mcp", "grok-bot"]
+}

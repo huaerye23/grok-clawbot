@@ -1,0 +1,25 @@
+{
+  "ret": 0,
+  "errcode": 0,
+  "errmsg": "",
+  "get_updates_buf": "cursor-finished-1",
+  "longpolling_timeout_ms": 35000,
+  "msgs": [
+    {
+      "seq": 1,
+      "message_id": 7441535359615655688,
+      "from_user_id": "o9cq80xxx@im.wechat",
+      "to_user_id": "2a4d413230a5@im.bot",
+      "create_time_ms": 1787078400000,
+      "message_type": 1,
+      "message_state": 2,
+      "context_token": "AARzJWAF-fixture-context",
+      "item_list": [
+        {
+          "type": 1,
+          "text_item": { "text": "你好" }
+        }
+      ]
+    }
+  ]
+}

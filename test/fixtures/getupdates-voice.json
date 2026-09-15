@@ -1,0 +1,18 @@
+{
+  "ret": 0,
+  "get_updates_buf": "cursor-voice",
+  "msgs": [
+    {
+      "from_user_id": "o9cq80voice@im.wechat",
+      "message_type": 1,
+      "message_state": 2,
+      "context_token": "AARzJWAF-voice",
+      "item_list": [
+        {
+          "type": 3,
+          "voice_item": { "text": "这是语音转写", "playtime": 1200 }
+        }
+      ]
+    }
+  ]
+}

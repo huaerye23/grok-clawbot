@@ -1,0 +1,27 @@
+{
+  "ret": 0,
+  "get_updates_buf": "cursor-mixed",
+  "msgs": [
+    {
+      "from_user_id": "o9cq80xxx@im.wechat",
+      "message_type": 1,
+      "message_state": 1,
+      "context_token": "tok-gen",
+      "item_list": [{ "type": 1, "text_item": { "text": "generating" } }]
+    },
+    {
+      "from_user_id": "bot-self@im.bot",
+      "message_type": 2,
+      "message_state": 2,
+      "context_token": "tok-bot",
+      "item_list": [{ "type": 1, "text_item": { "text": "bot" } }]
+    },
+    {
+      "from_user_id": "o9cq80xxx@im.wechat",
+      "message_type": "USER",
+      "message_state": "FINISH",
+      "context_token": "AARzJWAF-mixed-ok",
+      "item_list": [{ "type": 1, "text_item": { "text": "mixed-ok" } }]
+    }
+  ]
+}

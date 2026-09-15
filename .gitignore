@@ -1,0 +1,8 @@
+node_modules/
+.grok-clawbot/
+state.json
+wake.json
+inbox.jsonl
+.env
+*.log
+*.tmp

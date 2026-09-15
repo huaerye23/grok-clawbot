@@ -1,0 +1,16 @@
+{
+  "name": "grok-clawbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Grok Bot 插件：通过官方 WeChat ClawBot / iLink 绑定个人微信",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "mcp": "node server/index.js",
+    "test": "node --test test/*.test.js",
+    "handshake": "node scripts/mcp-handshake.mjs"
+  }
+}

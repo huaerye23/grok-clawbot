@@ -1,0 +1,13 @@
+{
+  "ret": 0,
+  "get_updates_buf": "cursor-generating",
+  "msgs": [
+    {
+      "from_user_id": "o9cq80xxx@im.wechat",
+      "message_type": 1,
+      "message_state": 1,
+      "context_token": "AARzJWAF-generating",
+      "item_list": [{ "type": 1, "text_item": { "text": "still typing" } }]
+    }
+  ]
+}

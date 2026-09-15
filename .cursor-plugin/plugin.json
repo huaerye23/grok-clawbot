@@ -1,0 +1,12 @@
+{
+  "name": "grok-clawbot",
+  "displayName": "Grok ClawBot WeChat",
+  "version": "1.0.0",
+  "description": "Grok Bot 插件：官方 ClawBot / iLink 接入个人微信。QR bind、inbound DM、outbound reply、status、logout。",
+  "author": {
+    "name": "grok-clawbot"
+  },
+  "keywords": ["wechat", "weixin", "ilink", "clawbot", "mcp"],
+  "mcpServers": "./mcp.json",
+  "skills": "./skills"
+}
