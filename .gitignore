@@ -3,6 +3,7 @@ node_modules/
 state.json
 wake.json
 inbox.jsonl
+monitor.pid
 .env
 *.log
 *.tmp

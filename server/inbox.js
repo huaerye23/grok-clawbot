@@ -1,4 +1,4 @@
-import { ERR_STALE_TOKEN, WAKE_SOURCE } from "./constants.js";
+import { ERR_STALE_TOKEN, WAKE_REPLY_INSTRUCTION, WAKE_SOURCE } from "./constants.js";
 import { extractFinishedUserDms } from "./ilink.js";
 
 export function isAllowedSender(fromUserId, allowFrom) {
@@ -21,8 +21,12 @@ export function buildWakePost(wake, dm) {
     headers,
     body: JSON.stringify({
       source: WAKE_SOURCE,
+      reply_now: true,
+      instruction: WAKE_REPLY_INSTRUCTION,
       from_user_id: dm.from_user_id,
+      to_user_id: dm.from_user_id,
       ilink_bot_id: dm.ilink_bot_id || "",
+      ilink_user_id: dm.ilink_user_id || "",
       context_token: dm.context_token || "",
       text: dm.text || "",
     }),

@@ -122,22 +122,45 @@ export function createRuntime({ store, transport } = {}) {
 
     async inbox() {
       const buffered = st.drainInbox();
-      if (buffered.length) {
-        return {
-          messages: buffered,
-          from_monitor: true,
-          session_expired: false,
-          wake_posts: [],
-        };
-      }
-      const polled = await pollInbox({ client: clientFor(), store: st });
       return {
-        messages: st.drainInbox(),
-        from_monitor: false,
-        session_expired: polled.session_expired,
-        get_updates_buf: polled.get_updates_buf,
-        wake_posts: polled.wake_posts,
+        messages: buffered,
+        from_monitor: true,
+        polled: false,
+        hint: buffered.length
+          ? undefined
+          : "缓冲为空。禁止 getupdates。确认独立 monitor 在跑；唤醒 webhook 已带 text 时直接 wechat_typing + wechat_send。",
       };
+    },
+
+    async setTyping({ to_user_id, on } = {}) {
+      const state = st.load();
+      if (!state.bot_token) throw new Error("未登录");
+      if (!to_user_id) throw new Error("to_user_id 必填");
+      const contextToken = state.context_tokens?.[to_user_id] || "";
+      let ticket = state.typing_tickets?.[to_user_id] || "";
+      const client = clientFor(state);
+      if (!ticket) {
+        const cfg = await client.getConfig({
+          ilinkUserId: to_user_id,
+          contextToken,
+          token: state.bot_token,
+        });
+        ticket = cfg.typing_ticket;
+        if (ticket) {
+          st.update((s) => {
+            s.typing_tickets = { ...(s.typing_tickets || {}), [to_user_id]: ticket };
+            return s;
+          });
+        }
+      }
+      if (!ticket) throw new Error("未拿到 typing_ticket");
+      await client.sendTyping({
+        ilinkUserId: to_user_id,
+        typingTicket: ticket,
+        on: !!on,
+        token: state.bot_token,
+      });
+      return { to_user_id, typing: !!on };
     },
 
     async send({ text, to_user_id, context_token } = {}) {
@@ -175,6 +198,7 @@ export function createRuntime({ store, transport } = {}) {
         wake_configured: Boolean(wake?.url),
         peers: Object.keys(state.context_tokens || {}),
         inbox: st.peekInboxCount(),
+        monitor_pid: st.monitorPid(),
       };
     },
 

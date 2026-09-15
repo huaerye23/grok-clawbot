@@ -9,13 +9,17 @@ import {
   ITEM_TYPE,
   MSG_STATE,
   MSG_TYPE,
+  LONG_POLL_MS,
   PATH_GET_BOT_QRCODE,
+  PATH_GET_CONFIG,
   PATH_GET_QRCODE_STATUS,
   PATH_GET_UPDATES,
   PATH_NOTIFY_START,
   PATH_NOTIFY_STOP,
   PATH_SEND_MESSAGE,
+  PATH_SEND_TYPING,
   QR_STATUS,
+  TYPING,
 } from "./constants.js";
 
 export function encodeClientVersion(major, minor, patch) {
@@ -257,6 +261,55 @@ export function buildSendMessageRequest({
   };
 }
 
+export function buildGetConfigRequest({
+  ilinkUserId,
+  contextToken,
+  token,
+  baseUrl = ILINK_BASE_URL,
+  uin,
+} = {}) {
+  if (!token) throw new Error("bot_token is required for getconfig");
+  if (!ilinkUserId) throw new Error("ilink_user_id is required");
+  return {
+    method: "POST",
+    path: PATH_GET_CONFIG,
+    url: joinIlinkUrl(baseUrl, PATH_GET_CONFIG),
+    headers: jsonPostHeaders({ token, uin }),
+    body: JSON.stringify({
+      ilink_user_id: ilinkUserId,
+      context_token: contextToken || undefined,
+      base_info: baseInfo(),
+    }),
+    timeoutMs: 10_000,
+  };
+}
+
+export function buildSendTypingRequest({
+  ilinkUserId,
+  typingTicket,
+  on,
+  token,
+  baseUrl = ILINK_BASE_URL,
+  uin,
+} = {}) {
+  if (!token) throw new Error("bot_token is required for sendtyping");
+  if (!ilinkUserId) throw new Error("ilink_user_id is required");
+  if (!typingTicket) throw new Error("typing_ticket is required");
+  return {
+    method: "POST",
+    path: PATH_SEND_TYPING,
+    url: joinIlinkUrl(baseUrl, PATH_SEND_TYPING),
+    headers: jsonPostHeaders({ token, uin }),
+    body: JSON.stringify({
+      ilink_user_id: ilinkUserId,
+      typing_ticket: typingTicket,
+      status: on ? TYPING.ON : TYPING.OFF,
+      base_info: baseInfo(),
+    }),
+    timeoutMs: 10_000,
+  };
+}
+
 export function buildNotifyRequest(path, { token, baseUrl = ILINK_BASE_URL, uin } = {}) {
   return {
     method: "POST",
@@ -270,6 +323,7 @@ export function buildNotifyRequest(path, { token, baseUrl = ILINK_BASE_URL, uin 
 export async function defaultFetchTransport(req) {
   const init = { method: req.method, headers: req.headers };
   if (req.body && req.method !== "GET") init.body = req.body;
+  if (req.timeoutMs) init.signal = AbortSignal.timeout(req.timeoutMs);
   const res = await fetch(req.url, init);
   const text = await res.text();
   let json = {};
@@ -326,8 +380,32 @@ export function createIlinkClient(options = {}) {
         baseUrl,
         uin: uinFactory(),
       });
+      req.timeoutMs = LONG_POLL_MS + 5_000;
       const res = await send(req);
       return { request: req, payload: res.json };
+    },
+    async getConfig({ ilinkUserId, contextToken, token: tok } = {}) {
+      const req = buildGetConfigRequest({
+        ilinkUserId,
+        contextToken,
+        token: tok || token,
+        baseUrl,
+        uin: uinFactory(),
+      });
+      const res = await send(req);
+      return { request: req, typing_ticket: res.json?.typing_ticket || "", response: res.json };
+    },
+    async sendTyping({ ilinkUserId, typingTicket, on, token: tok } = {}) {
+      const req = buildSendTypingRequest({
+        ilinkUserId,
+        typingTicket,
+        on,
+        token: tok || token,
+        baseUrl,
+        uin: uinFactory(),
+      });
+      const res = await send(req);
+      return { request: req, response: res.json, typing: !!on };
     },
     async sendText({ toUserId, text, contextToken, token: tok, clientId } = {}) {
       const id = clientId || clientIdFactory();

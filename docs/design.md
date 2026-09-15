@@ -4,7 +4,7 @@
 
 This repository is an installable **Grok Bot 插件**. It binds a **个人微信** account through Tencent’s official **ClawBot** product and the **iLink** HTTP/JSON bot API hosted at `ilinkai.weixin.qq.com`. It is not an OpenClaw Gateway channel package, not a reverse-engineered WeChat client, and not a 公众号 / 企业微信 / 微信客服 adapter.
 
-Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. Grok Bot may sleep, so production inbound is a long-poll monitor plus a wake POST to a webhook Routine — the assistant drains `wechat_inbox`, reasons with the model like in-app chat, then `wechat_send`. Not a live scan in this environment.
+Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. Grok Bot may sleep, so production inbound is a **detached** long-poll monitor plus a wake POST (with the DM body) to a webhook Routine — the assistant `wechat_typing`, reasons with the model like in-app chat, then `wechat_send`. `wechat_inbox` only drains if the webhook has no text. Not a live scan in this environment.
 
 ## Open-source references
 
@@ -62,7 +62,13 @@ Protocol fields and examples in this document follow Tencent/openclaw-weixin `do
 
 HTTP is an injected `transport(req) → { status, json, text }`. Protocol builders never call `fetch` themselves. Inbox accept (allowlist + wake) lives next to inbox, not inside JSON builders.
 
-Monitor `poll` advances `get_updates_buf` and **persists accepted DMs to `inbox.jsonl`** (plus optional wake POST). MCP `wechat_inbox` **drains that buffer** and must not call `getupdates` again; otherwise the cursor has moved and the woken assistant would see `[]`.
+**Grok Bot fast path** (aligned with `little-thing/grok-wechat-plugin`):
+
+1. A **detached** `node server/index.js --monitor` process long-polls `getupdates` (this is the only place a 35s hold is allowed). It survives Grok Bot sleep.
+2. On each accepted DM it writes `inbox.jsonl` and POSTs wake **with the DM body** (`text`, `from_user_id`, `context_token`, `reply_now`).
+3. The woken assistant must **not** long-poll. It `wechat_typing` on, replies with `wechat_send` from the webhook payload, then typing off. `wechat_inbox` only drains `inbox.jsonl`; empty buffer returns `[]` immediately.
+
+Putting `getupdates` on the assistant turn is what makes “微信入站唤醒” feel tens of seconds slower than Grok Bot’s design. Cold start of the assistant is a platform cost; the plugin must not add another long-poll on top.
 
 ### Default identity on the wire
 
@@ -169,7 +175,8 @@ MCP tools (names the skill operates):
 | `wechat_send` | send |
 | `wechat_status` | status |
 | `wechat_logout` | logout |
-| `wechat_set_wake` | optional wake URL |
+| `wechat_set_wake` | wake URL (required for auto-reply) |
+| `wechat_typing` | typing on/off around send |
 | `wechat_approve` | allowlist |
 | `wechat_start_monitor` / `wechat_stop_monitor` | long-poll while Grok Bot sleeps |
 
@@ -179,8 +186,8 @@ stdio accepts newline-delimited JSON-RPC and `Content-Length` frames.
 
 Grok Bot assistants are not a 24/7 process. little-thing/grok-wechat-plugin’s production pattern is required reading:
 
-1. After bind, start a local long-poll (`wechat_start_monitor`) so `getupdates` is not tied to a chat turn.
-2. On each accepted DM, POST the configured wake URL so the assistant runs `wechat_inbox` then `wechat_send`.
+1. After bind, start a **detached** long-poll (`wechat_start_monitor` → `node server/index.js --monitor`) so `getupdates` is not tied to a chat turn and survives MCP sleep.
+2. On each accepted DM, POST the wake URL **with the message body**. The assistant `wechat_typing` → think → `wechat_send`. Drain `wechat_inbox` only if the webhook has no text.
 3. A periodic routine that only calls `wechat_start_monitor` covers process death.
 
 This environment does **not** perform a live ClawBot QR scan. Fixture tests with a fake HTTP transport are the gate.
@@ -190,14 +197,14 @@ This environment does **not** perform a live ClawBot QR scan. Fixture tests with
 | Option | Decision |
 | --- | --- |
 | Depend on `@tencent-weixin/openclaw-weixin` at runtime | Rejected. That package is an OpenClaw channel. We speak iLink HTTP directly so this remains a Grok Bot 插件 and tests can inject transport. |
-| Copy little-thing/grok-wechat-plugin | Rejected as the sole artifact. Used as packaging/wake reference only. Media, typing, dedicated-assistant dashboards are non-goals. |
+| Copy little-thing/grok-wechat-plugin | Rejected as the sole artifact. Used as packaging/wake/fast-path reference. Media and dedicated-assistant dashboards stay out of v1. |
 | itchat / wechaty / pad | Rejected. Unofficial, ban-prone, not ClawBot. |
 | 公众号 / 企业微信 APIs | Rejected. Different products, not 个人微信 ClawBot. |
 | TypeScript + MCP SDK | Rejected for v1. Zero extra runtime deps (Node ≥18 `fetch` + built-in test runner) matches the Grok Bot plugin reference and keeps the MCP entry a single `node server/index.js`. |
 
 ## Out of scope (v1)
 
-Image/video/file AES-128-ECB CDN, typing tickets, multi-account dedicated Grok Bot assistants, marketplace publish, group chat, live QR against a real phone in CI.
+Image/video/file AES-128-ECB CDN, multi-account dedicated Grok Bot assistants, marketplace publish, group chat, live QR against a real phone in CI. Typing is in-scope for the Grok Bot perceived-latency path (`wechat_typing` before/after send).
 
 ## Key Decisions
 
@@ -210,6 +217,7 @@ Image/video/file AES-128-ECB CDN, typing tickets, multi-account dedicated Grok B
 7. **Credentials live in `~/.grok-clawbot`, never the repo** — `bot_token` / `ilink_bot_id` mode 600; gitignored.
 8. **Reply always echoes inbound `context_token` and a fresh `client_id`** — this is the difference between “HTTP 200” and a message that actually appears in WeChat (SiverKing write-up).
 9. **Identify as `Grokbot/1.0.0` on `bot_agent`** — ClawBot is Tencent’s phone-side name; the connector page should show Grokbot.
+10. **Detached monitor + wake-with-body + typing** — `getupdates` never runs on the assistant turn; webhook already has the DM; `wechat_typing` covers Grok Bot cold-start wait.
 
 ## Open Questions
 

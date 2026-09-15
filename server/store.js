@@ -20,6 +20,7 @@ export function emptyState() {
     allow_from: [],
     pending_qr: null,
     poll_base_url: "",
+    typing_tickets: {},
   };
 }
 
@@ -44,6 +45,7 @@ export function createStore(rootDir) {
   const statePath = path.join(home, "state.json");
   const wakePath = path.join(home, "wake.json");
   const inboxPath = path.join(home, "inbox.jsonl");
+  const pidPath = path.join(home, "monitor.pid");
 
   function load() {
     if (!fs.existsSync(statePath)) return emptyState();
@@ -117,11 +119,44 @@ export function createStore(rootDir) {
       .filter((line) => line.trim()).length;
   }
 
+  function writePid(pid) {
+    fs.mkdirSync(home, { recursive: true });
+    fs.writeFileSync(pidPath, String(pid));
+  }
+
+  function readPid() {
+    if (!fs.existsSync(pidPath)) return 0;
+    const n = Number(fs.readFileSync(pidPath, "utf8").trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function clearPid() {
+    if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
+  }
+
+  function isPidAlive(pid) {
+    if (!pid) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function monitorPid() {
+    const pid = readPid();
+    if (isPidAlive(pid)) return pid;
+    if (pid) clearPid();
+    return 0;
+  }
+
   function clear() {
     const blank = emptyState();
     save(blank);
     if (fs.existsSync(wakePath)) fs.unlinkSync(wakePath);
     if (fs.existsSync(inboxPath)) fs.unlinkSync(inboxPath);
+    if (fs.existsSync(pidPath)) fs.unlinkSync(pidPath);
     return blank;
   }
 
@@ -130,6 +165,12 @@ export function createStore(rootDir) {
     statePath,
     wakePath,
     inboxPath,
+    pidPath,
+    writePid,
+    readPid,
+    clearPid,
+    isPidAlive,
+    monitorPid,
     load,
     save,
     update,

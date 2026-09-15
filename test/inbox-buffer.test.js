@@ -60,6 +60,21 @@ test("cursor-once: first poll consumes getupdates; subsequent wechat_inbox still
 
   const second = parseTool(await host.dispatch("wechat_inbox", {}));
   assert.equal(second.messages.length, 0);
+  assert.equal(second.polled, false);
   const getupdatesAfterSecond = transport.calls.filter((c) => String(c.url).includes("/ilink/bot/getupdates")).length;
-  assert.ok(getupdatesAfterSecond >= 1);
+  assert.equal(getupdatesAfterSecond, 1);
+});
+
+test("empty wechat_inbox does not call getupdates", async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "grok-clawbot-empty-"));
+  const store = createStore(tmp);
+  store.save({ ...store.load(), bot_token: "tok" });
+  const transport = recordingTransport(async (req) => {
+    throw new Error(`assistant turn must not hit iLink: ${req.url}`);
+  });
+  const host = createMcpHost({ store, transport });
+  const inbox = parseTool(await host.dispatch("wechat_inbox", {}));
+  assert.equal(inbox.messages.length, 0);
+  assert.equal(inbox.polled, false);
+  assert.equal(transport.calls.length, 0);
 });

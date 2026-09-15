@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { createMcpHost } from "./mcp.js";
+import { runMonitorLoop } from "./monitor.js";
 import { createStore } from "./store.js";
-
-const host = createMcpHost({ store: createStore() });
 
 function writeMessage(msg) {
   fs.writeSync(1, `${JSON.stringify(msg)}\n`);
 }
 
 function startStdio() {
+  const host = createMcpHost({ store: createStore() });
   try {
     if (process.stdout._handle?.setBlocking) process.stdout._handle.setBlocking(true);
     if (process.stdin._handle?.setBlocking) process.stdin._handle.setBlocking(true);
@@ -57,4 +57,8 @@ function startStdio() {
   });
 }
 
-startStdio();
+if (process.argv.includes("--monitor")) {
+  runMonitorLoop();
+} else {
+  startStdio();
+}

@@ -1,4 +1,5 @@
 import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from "./constants.js";
+import { ensureDetachedMonitor, stopMonitor } from "./monitor.js";
 import { createRuntime } from "./runtime.js";
 import { createStore } from "./store.js";
 
@@ -22,8 +23,20 @@ export const TOOLS = {
   },
   wechat_inbox: {
     description:
-      "Inbox: drain accepted DMs already persisted by the monitor (inbox.jsonl). Does not call getupdates again. If the buffer is empty (no monitor), poll once then drain.",
+      "Fast path: drain inbox.jsonl only. NEVER long-poll getupdates. If webhook already has text, skip this and wechat_send. Empty buffer → return [] and start/confirm monitor.",
     inputSchema: { type: "object", properties: {} },
+  },
+  wechat_typing: {
+    description:
+      "Show or hide WeChat typing. Call on=true BEFORE thinking a reply, on=false after wechat_send (finally). This is the Grok Bot perceived-latency path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        on: { type: "boolean" },
+        to_user_id: { type: "string" },
+      },
+      required: ["on", "to_user_id"],
+    },
   },
   wechat_send: {
     description:
@@ -70,11 +83,11 @@ export const TOOLS = {
   },
   wechat_start_monitor: {
     description:
-      "Start a background long-poll of getupdates. Accepted DMs are written to inbox.jsonl and optionally wake-POSTed; wechat_inbox drains that buffer. Idempotent if already running in this process.",
+      "Start a DETACHED long-poll process (survives Grok Bot sleep). Writes inbox.jsonl and POSTs wake with the DM body. Idempotent.",
     inputSchema: { type: "object", properties: {} },
   },
   wechat_stop_monitor: {
-    description: "Stop the in-process long-poll monitor.",
+    description: "Stop the detached long-poll monitor.",
     inputSchema: { type: "object", properties: {} },
   },
 };
@@ -98,56 +111,43 @@ function fail(message) {
   };
 }
 
-export function createMcpHost({ store, transport, runtime } = {}) {
-  const rt = runtime || createRuntime({ store: store || createStore(), transport });
-  let monitor = { running: false, stop: null };
+export function createMcpHost({ store, transport, runtime, monitor } = {}) {
+  const st = store || createStore();
+  const rt = runtime || createRuntime({ store: st, transport });
+  const mon = monitor || {
+    ensure: () => ensureDetachedMonitor(rt.store),
+    stop: () => stopMonitor(rt.store),
+    running: () => rt.store.monitorPid(),
+  };
 
   async function dispatch(name, args = {}) {
     switch (name) {
       case "wechat_login_start":
         return ok(await rt.loginStart());
-      case "wechat_login_wait":
-        return ok(await rt.loginWait(args));
+      case "wechat_login_wait": {
+        const waited = await rt.loginWait(args);
+        if (waited.logged_in) waited.monitor = mon.ensure();
+        return ok(waited);
+      }
       case "wechat_inbox":
         return ok(await rt.inbox());
+      case "wechat_typing":
+        return ok(await rt.setTyping(args));
       case "wechat_send":
         return ok(await rt.send(args));
       case "wechat_status":
-        return ok({ ...rt.status(), monitor_running: monitor.running });
+        return ok({ ...rt.status(), monitor_pid: mon.running() || 0 });
       case "wechat_logout":
-        if (monitor.stop) monitor.stop();
-        monitor = { running: false, stop: null };
+        mon.stop();
         return ok(rt.logout());
       case "wechat_set_wake":
         return ok(rt.setWake(args));
       case "wechat_approve":
         return ok(rt.approve(args));
-      case "wechat_start_monitor": {
-        if (monitor.running) return ok({ already_running: true });
-        if (!rt.status().logged_in) return ok({ started: false, reason: "not_logged_in" });
-        let running = true;
-        monitor = {
-          running: true,
-          stop: () => {
-            running = false;
-            monitor.running = false;
-          },
-        };
-        (async () => {
-          while (running) {
-            try {
-              await rt.poll();
-            } catch {
-              await new Promise((r) => setTimeout(r, 2000));
-            }
-          }
-        })();
-        return ok({ started: true });
-      }
+      case "wechat_start_monitor":
+        return ok(mon.ensure());
       case "wechat_stop_monitor":
-        if (monitor.stop) monitor.stop();
-        monitor = { running: false, stop: null };
-        return ok({ stopped: true });
+        return ok(mon.stop());
       default:
         return fail(`未知工具: ${name}`);
     }
@@ -156,6 +156,7 @@ export function createMcpHost({ store, transport, runtime } = {}) {
   async function handleRpc(msg) {
     const { id, method, params } = msg || {};
     if (method === "initialize") {
+      mon.ensure();
       return {
         jsonrpc: "2.0",
         id,

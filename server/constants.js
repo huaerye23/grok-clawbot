@@ -12,8 +12,15 @@ export const PATH_GET_BOT_QRCODE = "/ilink/bot/get_bot_qrcode?bot_type=3";
 export const PATH_GET_QRCODE_STATUS = "/ilink/bot/get_qrcode_status";
 export const PATH_GET_UPDATES = "/ilink/bot/getupdates";
 export const PATH_SEND_MESSAGE = "/ilink/bot/sendmessage";
+export const PATH_GET_CONFIG = "/ilink/bot/getconfig";
+export const PATH_SEND_TYPING = "/ilink/bot/sendtyping";
 export const PATH_NOTIFY_START = "/ilink/bot/msg/notifystart";
 export const PATH_NOTIFY_STOP = "/ilink/bot/msg/notifystop";
+
+export const TYPING = { ON: 1, OFF: 2 };
+export const LONG_POLL_MS = 35_000;
+export const WAKE_REPLY_INSTRUCTION =
+  "Webhook already has the DM. Immediately wechat_typing on, wechat_send(to_user_id=from_user_id, text=reply), wechat_typing off. Do not getupdates. Call wechat_inbox only if text is missing.";
 
 export const MSG_TYPE = { NONE: 0, USER: 1, BOT: 2 };
 export const MSG_STATE = { NEW: 0, GENERATING: 1, FINISH: 2 };
