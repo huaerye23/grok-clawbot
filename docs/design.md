@@ -4,7 +4,7 @@
 
 This repository is an installable **Grok Bot 插件**. It binds a **个人微信** account through Tencent’s official **ClawBot** product and the **iLink** HTTP/JSON bot API hosted at `ilinkai.weixin.qq.com`. It is not an OpenClaw Gateway channel package, not a reverse-engineered WeChat client, and not a 公众号 / 企业微信 / 微信客服 adapter.
 
-Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. Grok Bot may sleep, so production inbound is a long-poll monitor plus an optional wake POST — not a live scan in this environment.
+Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. Grok Bot may sleep, so production inbound is a long-poll monitor plus a wake POST to a webhook Routine — the assistant drains `wechat_inbox`, reasons with the model like in-app chat, then `wechat_send`. Not a live scan in this environment.
 
 ## Open-source references
 
