@@ -16,7 +16,7 @@ description: 在 Grok Bot 里安装、QR 绑定个人微信 ClawBot/iLink、收�
 **长轮询不在助手回合里。** Grok Bot 冷启动已经最慢；插件禁止再叠 `getupdates`（服务端可 hold 35s）。
 
 ```
-独立 monitor（node server/index.js --monitor，Grok Bot 睡着也在跑）
+独立 monitor（优先 native/monitor 的 Rust 二进制，否则 node server/index.js --monitor；Grok Bot 睡着也在跑）
     getupdates 长轮询     ← 消息一到立刻返回，空转才卡几秒到 35s
     写入 inbox.jsonl
     POST wake（body 已含 text / from_user_id / context_token / reply_now）
@@ -69,7 +69,7 @@ Grok Bot 会休眠。绑定成功后必须做完这三步，微信才会「自�
 
 ### 3. 监听保活 Routine
 
-创建定时 Routine（建议 `@every 5m`），prompt **只**调用 `wechat_start_monitor`，失败才通知用户。微信私信可全天到达，保活需要全天候。这会拉起**独立进程** `node server/index.js --monitor`，不跟 MCP 请求同生共死。
+创建定时 Routine（建议 `@every 5m`），prompt **只**调用 `wechat_start_monitor`，失败才通知用户。微信私信可全天到达，保活需要全天候。这会拉起**独立进程**（有 `npm run monitor:build` 产物则用 Rust，否则 Node `--monitor`），不跟 MCP 请求同生共死。MCP / 扫码 / 回复仍是 Node。
 
 绑定后还要立刻手动调一次 `wechat_start_monitor`。
 

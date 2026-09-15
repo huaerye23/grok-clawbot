@@ -1,16 +1,36 @@
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRuntime } from "./runtime.js";
 import { createStore } from "./store.js";
 
-const DEFAULT_ENTRY = fileURLToPath(new URL("./index.js", import.meta.url));
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(SERVER_DIR, "..");
+const DEFAULT_ENTRY = path.join(SERVER_DIR, "index.js");
 
-export function ensureDetachedMonitor(store, { entry = DEFAULT_ENTRY } = {}) {
+export function rustMonitorBinary(repoRoot = REPO_ROOT) {
+  const exe = process.platform === "win32" ? "grok-clawbot-monitor.exe" : "grok-clawbot-monitor";
+  const p = path.join(repoRoot, "native", "monitor", "target", "release", exe);
+  return fs.existsSync(p) ? p : "";
+}
+
+export function resolveMonitorSpawn(repoRoot = REPO_ROOT, entry = DEFAULT_ENTRY) {
+  const rust = rustMonitorBinary(repoRoot);
+  if (rust) return { command: rust, args: [], runtime: "rust" };
+  return {
+    command: process.execPath,
+    args: [path.resolve(entry), "--monitor"],
+    runtime: "node",
+  };
+}
+
+export function ensureDetachedMonitor(store, { entry = DEFAULT_ENTRY, repoRoot = REPO_ROOT } = {}) {
   const existing = store.monitorPid();
   if (existing) return { already_running: true, pid: existing, detached: true };
   if (!store.load().bot_token) return { started: false, reason: "not_logged_in" };
-  const child = spawn(process.execPath, [path.resolve(entry), "--monitor"], {
+  const spawnSpec = resolveMonitorSpawn(repoRoot, entry);
+  const child = spawn(spawnSpec.command, spawnSpec.args, {
     detached: true,
     stdio: "ignore",
     env: process.env,
@@ -18,7 +38,7 @@ export function ensureDetachedMonitor(store, { entry = DEFAULT_ENTRY } = {}) {
   });
   child.unref();
   store.writePid(child.pid);
-  return { started: true, pid: child.pid, detached: true };
+  return { started: true, pid: child.pid, detached: true, runtime: spawnSpec.runtime };
 }
 
 export function stopMonitor(store) {

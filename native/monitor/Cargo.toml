@@ -1,0 +1,20 @@
+[package]
+name = "grok-clawbot-monitor"
+version = "1.0.0"
+edition = "2021"
+description = "Detached iLink long-poll monitor for grok-clawbot (Rust sidecar)"
+license = "MIT"
+publish = false
+
+[lib]
+name = "grok_clawbot_monitor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "grok-clawbot-monitor"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+serde_json = "1"
+ureq = { version = "2.12", features = ["json"] }

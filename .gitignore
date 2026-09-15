@@ -7,3 +7,4 @@ monitor.pid
 .env
 *.log
 *.tmp
+native/monitor/target/

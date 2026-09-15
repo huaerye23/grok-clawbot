@@ -11,6 +11,9 @@
     "start": "node server/index.js",
     "mcp": "node server/index.js",
     "test": "node --test test/*.test.js",
+    "test:native": "cargo test --manifest-path native/monitor/Cargo.toml",
+    "test:all": "node --test test/*.test.js && cargo test --manifest-path native/monitor/Cargo.toml",
+    "monitor:build": "cargo build --release --manifest-path native/monitor/Cargo.toml",
     "handshake": "node scripts/mcp-handshake.mjs"
   }
 }

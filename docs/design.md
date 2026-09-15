@@ -64,7 +64,7 @@ HTTP is an injected `transport(req) → { status, json, text }`. Protocol builde
 
 **Grok Bot fast path** (aligned with `little-thing/grok-wechat-plugin`):
 
-1. A **detached** `node server/index.js --monitor` process long-polls `getupdates` (this is the only place a 35s hold is allowed). It survives Grok Bot sleep.
+1. A **detached** monitor long-polls `getupdates` (this is the only place a 35s hold is allowed). Prefer the Rust sidecar `native/monitor` (`npm run monitor:build`) for a lighter always-on process; fall back to `node server/index.js --monitor`. MCP, QR bind, typing, and send stay Node because Grok Bot launches `node server/index.js`. Node vs Rust does not change iLink hold time or Grok Bot cold start.
 2. On each accepted DM it writes `inbox.jsonl` and POSTs wake **with the DM body** (`text`, `from_user_id`, `context_token`, `reply_now`).
 3. The woken assistant must **not** long-poll. It `wechat_typing` on, replies with `wechat_send` from the webhook payload, then typing off. `wechat_inbox` only drains `inbox.jsonl`; empty buffer returns `[]` immediately.
 
