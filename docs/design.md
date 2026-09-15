@@ -4,7 +4,7 @@
 
 This repository is an installable **Grok Bot 插件**. It binds a **个人微信** account through Tencent’s official **ClawBot** product and the **iLink** HTTP/JSON bot API hosted at `ilinkai.weixin.qq.com`. It is not an OpenClaw Gateway channel package, not a reverse-engineered WeChat client, and not a 公众号 / 企业微信 / 微信客服 adapter.
 
-Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. Grok Bot may sleep, so production inbound is a **detached** long-poll monitor plus a wake POST (with the DM body) to a webhook Routine — the assistant `wechat_typing`, reasons with the model like in-app chat, then `wechat_send`. `wechat_inbox` only drains if the webhook has no text. Not a live scan in this environment.
+Phone WeChat talks to the built-in ClawBot plugin. ClawBot talks to iLink. This plugin is a local MCP stdio server plus a skill: QR bind, DM inbox, text reply, status, logout. **Idle does not consume model tokens** — do not sleep the bot to save tokens. Production inbound is a detached long-poll monitor (0 tokens) that only POSTs wake when a DM arrives. If the assistant is already running it replies immediately (`wechat_typing` → model → `wechat_send`). Webhook cold start is a fallback when the host unloaded the session, not the intended mode. `wechat_inbox` only drains if the webhook has no text. Not a live scan in this environment.
 
 ## Open-source references
 
@@ -64,11 +64,11 @@ HTTP is an injected `transport(req) → { status, json, text }`. Protocol builde
 
 **Grok Bot fast path** (aligned with `little-thing/grok-wechat-plugin`):
 
-1. A **detached** monitor long-polls `getupdates` (this is the only place a 35s hold is allowed). Prefer the Rust sidecar `native/monitor` (`npm run monitor:build`) for a lighter always-on process; fall back to `node server/index.js --monitor`. MCP, QR bind, typing, and send stay Node because Grok Bot launches `node server/index.js`. Node vs Rust does not change iLink hold time or Grok Bot cold start.
-2. On each accepted DM it writes `inbox.jsonl` and POSTs wake **with the DM body** (`text`, `from_user_id`, `context_token`, `reply_now`).
-3. The woken assistant must **not** long-poll. It `wechat_typing` on, replies with `wechat_send` from the webhook payload, then typing off. `wechat_inbox` only drains `inbox.jsonl`; empty buffer returns `[]` immediately.
+1. A **detached** monitor long-polls `getupdates` (the only 35s hold). Prefer Rust `native/monitor`; fall back to `node server/index.js --monitor`. This process uses **0 model tokens** while idle. MCP / QR / typing / send stay Node because Grok Bot launches `node server/index.js`.
+2. On each accepted DM it writes `inbox.jsonl` and POSTs wake **with the DM body**. Token spend starts only here, when the assistant actually replies.
+3. If the assistant is already up, reply immediately. Do not treat webhook as a mandatory cold boot. `wechat_inbox` only drains; empty buffer returns `[]`. Never `getupdates` on the assistant turn.
 
-Putting `getupdates` on the assistant turn is what makes “微信入站唤醒” feel tens of seconds slower than Grok Bot’s design. Cold start of the assistant is a platform cost; the plugin must not add another long-poll on top.
+Cold start is **not** maintained to save tokens. A 5-minute LLM “keepalive” that only calls `wechat_start_monitor` **does** spend tokens and is optional only if the host would otherwise power off the whole machine (killing the monitor).
 
 ### Default identity on the wire
 
@@ -178,17 +178,24 @@ MCP tools (names the skill operates):
 | `wechat_set_wake` | wake URL (required for auto-reply) |
 | `wechat_typing` | typing on/off around send |
 | `wechat_approve` | allowlist |
-| `wechat_start_monitor` / `wechat_stop_monitor` | long-poll while Grok Bot sleeps |
+| `wechat_start_monitor` / `wechat_stop_monitor` | detached 0-token long-poll |
 
 stdio accepts newline-delimited JSON-RPC and `Content-Length` frames.
 
-## Grok Bot sleep
+## Idle vs tokens
 
-Grok Bot assistants are not a 24/7 process. little-thing/grok-wechat-plugin’s production pattern is required reading:
+Idle WeChat with no reply = **0 model tokens**. The plugin must not sleep the bot to save tokens.
 
-1. After bind, start a **detached** long-poll (`wechat_start_monitor` → `node server/index.js --monitor`) so `getupdates` is not tied to a chat turn and survives MCP sleep.
-2. On each accepted DM, POST the wake URL **with the message body**. The assistant `wechat_typing` → think → `wechat_send`. Drain `wechat_inbox` only if the webhook has no text.
-3. A periodic routine that only calls `wechat_start_monitor` covers process death.
+| Piece | When it runs | Tokens |
+| --- | --- | --- |
+| Detached monitor `getupdates` | Always, while the host is up | 0 |
+| `wechat_send` / model turn | Only after an accepted DM | yes |
+| LLM “every 5m start_monitor” Routine | Avoid | yes (waste) |
+| Webhook wake | Fallback if the host unloaded the session | yes, for the reply |
+
+1. After bind, `wechat_start_monitor` (OS process, 0 tokens).
+2. On DM: wake payload already has the text; assistant already running → reply now; else webhook starts one turn.
+3. Do not use a periodic model turn as primary keepalive.
 
 This environment does **not** perform a live ClawBot QR scan. Fixture tests with a fake HTTP transport are the gate.
 
@@ -217,7 +224,8 @@ Image/video/file AES-128-ECB CDN, multi-account dedicated Grok Bot assistants, m
 7. **Credentials live in `~/.grok-clawbot`, never the repo** — `bot_token` / `ilink_bot_id` mode 600; gitignored.
 8. **Reply always echoes inbound `context_token` and a fresh `client_id`** — this is the difference between “HTTP 200” and a message that actually appears in WeChat (SiverKing write-up).
 9. **Identify as `Grokbot/1.0.0` on `bot_agent`** — ClawBot is Tencent’s phone-side name; the connector page should show Grokbot.
-10. **Detached monitor + wake-with-body + typing** — `getupdates` never runs on the assistant turn; webhook already has the DM; `wechat_typing` covers Grok Bot cold-start wait.
+10. **Detached monitor + wake-with-body + typing** — `getupdates` never runs on the assistant turn; webhook already has the DM; `wechat_typing` while the model thinks.
+11. **Idle = 0 tokens; do not keep a cold-start architecture to save tokens.** Monitor is the keepalive. Webhook cold start is only if the host killed the session.
 
 ## Open Questions
 

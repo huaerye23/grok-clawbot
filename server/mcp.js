@@ -83,7 +83,7 @@ export const TOOLS = {
   },
   wechat_start_monitor: {
     description:
-      "Start a DETACHED long-poll process (survives Grok Bot sleep). Writes inbox.jsonl and POSTs wake with the DM body. Idempotent.",
+      "Start a DETACHED long-poll (OS process, 0 model tokens while idle). Writes inbox.jsonl and POSTs wake with the DM body. Prefer Rust binary. Idempotent.",
     inputSchema: { type: "object", properties: {} },
   },
   wechat_stop_monitor: {

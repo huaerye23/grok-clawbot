@@ -11,27 +11,28 @@ description: 在 Grok Bot 里安装、QR 绑定个人微信 ClawBot/iLink、收�
 
 `base_info.bot_agent = Grokbot/1.0.0`。连接页显示 Grokbot。微信里的「ClawBot」是腾讯产品名。
 
-## 响应路径（必须按这个，否则会慢几十秒）
+## 响应路径（空闲 0 token，有消息才推理）
 
-**长轮询不在助手回合里。** Grok Bot 冷启动已经最慢；插件禁止再叠 `getupdates`（服务端可 hold 35s）。
+**不要为了省 token 让 Bot 睡。** 没私信时不调模型，token 就是 0。冷启动不是本插件要维持的模式，只是主机把会话卸掉之后的退路。
+
+正路：
 
 ```
-独立 monitor（优先 native/monitor 的 Rust 二进制，否则 node server/index.js --monitor；Grok Bot 睡着也在跑）
-    getupdates 长轮询     ← 消息一到立刻返回，空转才卡几秒到 35s
+独立 monitor 常驻（Rust 优先，否则 node --monitor）  ← OS 进程，0 token
+    getupdates 长轮询     ← 空转是 iLink hold，不是模型计费
     写入 inbox.jsonl
-    POST wake（body 已含 text / from_user_id / context_token / reply_now）
+    有私信才 POST wake（body 已含 text / from_user_id / context_token）
 
-助手被 webhook 叫醒（冷启动，平台成本，无法省略）
-    1. 立刻 wechat_typing { on: true, to_user_id: from_user_id }   ← 用户先看到「正在输入」
-    2. 用 webhook 里的 text 当对本 Bot 的正常聊天，短回复，像即时消息（不要再 getupdates）
-    3. wechat_send { text, to_user_id: from_user_id }
-    4. wechat_typing { on: false, to_user_id: from_user_id }       ← finally，失败也关
-
-webhook 没有 text 时才 wechat_inbox（只 drain inbox.jsonl）。缓冲空就安静结束，禁止自己去长轮询。
-永不打印 token / 凭证。
+Bot 若已在跑：立刻回复，不要当第一次开机
+    1. wechat_typing on
+    2. 把 text 当正常聊天，短回复（不要 getupdates）
+    3. wechat_send
+    4. wechat_typing off（finally）
 ```
 
-任务做完或需要用户拍板：**立刻回复**。禁止为了「再确认一下」去 `getupdates`。
+webhook 没有 text 时才 `wechat_inbox` drain。缓冲空就安静结束。永不打印 token / 凭证。
+
+任务做完或需要用户拍板：**立刻回复**。禁止为了「再确认一下」去 `getupdates`。禁止空转时喊模型「保活」。
 
 ## 安装
 
@@ -43,35 +44,28 @@ webhook 没有 text 时才 wechat_inbox（只 drain inbox.jsonl）。缓冲空�
 
 ## 自动回复（必做）
 
-Grok Bot 会休眠。绑定成功后必须做完这三步，微信才会「自己回」：
+绑定成功后：
 
-### 1. 入站唤醒 Routine（webhook）
+### 1. 常驻 monitor（0 token，正路保活）
 
-创建一条 webhook Routine，例如名「微信入站唤醒」，prompt 意图：
+立刻 `wechat_start_monitor`。这是 OS 独立进程（Rust 二进制优先，否则 `node server/index.js --monitor`），**不走模型、不计 token**。MCP initialize / 登录成功也会确保它在跑。
 
-- 被 webhook 唤醒后：若 payload 已有 `text` / `from_user_id`，立刻 `wechat_typing on` → 模型短回复 → `wechat_send` → typing off
-- payload 没有正文才 `wechat_inbox` drain（不要再自己 poll）
-- 若 inbox 空则安静结束
-- 对每条私信：当作对本 Bot 的正常聊天，回复要短，像即时消息
-- 用该条的 `from_user_id` 调用 `wechat_send`（本机已缓存 `context_token`）
-- 确保 `wechat_start_monitor` 在跑
+不要用「每 5 分钟喊一次模型只调 wechat_start_monitor」当主保活：那会白白耗 token，而 monitor 本来就该一直在。
+
+### 2. 入站 webhook（退路，不是为了省 token）
+
+仅当主机仍可能把助手会话卸掉时才需要。创建 webhook Routine「微信入站唤醒」：
+
+- 已在跑就直接回，不要当冷启动重装一遍
+- payload 有 `text` / `from_user_id`：`wechat_typing on` → 短回复 → `wechat_send` → typing off
+- 没有正文才 `wechat_inbox` drain；空则安静结束
 - 永不打印 token / 凭证
 
-助手**看不到** webhook 的 URL 和 sender key。用户必须从该 Routine 面板复制一次，再交给助手。
+助手看不到 URL/key。用户从 Routine 面板复制一次，`wechat_set_wake`（`url` + `key`）。每条被接受的私信 POST 一次（body 带正文）。
 
-### 2. 粘贴 wake（一次性）
+### 3. 可选：主机防休眠（会耗少量 token）
 
-用户贴上 URL + key 后，调用：
-
-`wechat_set_wake`：`url` + `key`（Authorization Bearer）
-
-之后每条被接受的私信会 POST 一次唤醒（body 带正文，便于跳过 inbox）。
-
-### 3. 监听保活 Routine
-
-创建定时 Routine（建议 `@every 5m`），prompt **只**调用 `wechat_start_monitor`，失败才通知用户。微信私信可全天到达，保活需要全天候。这会拉起**独立进程**（有 `npm run monitor:build` 产物则用 Rust，否则 Node `--monitor`），不跟 MCP 请求同生共死。MCP / 扫码 / 回复仍是 Node。
-
-绑定后还要立刻手动调一次 `wechat_start_monitor`。
+只有平台会把整台 Grok Bot 电脑睡死、连 monitor 一起杀掉时，才加定时 Routine。prompt **只** `wechat_start_monitor`。这是主机保活，不是省 token，且**每次触发都会走一轮助手**。能关主机休眠就关，不要靠它。
 
 ## 扫码绑定
 

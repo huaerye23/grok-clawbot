@@ -10,7 +10,7 @@ pub const PATH_GET_UPDATES: &str = "/ilink/bot/getupdates";
 pub const WAKE_SOURCE: &str = "grok-clawbot";
 pub const ERR_STALE_TOKEN: i64 = -14;
 pub const LONG_POLL_MS: u64 = 35_000;
-pub const WAKE_REPLY_INSTRUCTION: &str = "Webhook already has the DM. Immediately wechat_typing on, wechat_send(to_user_id=from_user_id, text=reply), wechat_typing off. Do not getupdates. Call wechat_inbox only if text is missing.";
+pub const WAKE_REPLY_INSTRUCTION: &str = "Idle uses 0 model tokens; do not sleep the bot to save tokens. This payload already has the DM. If you are already running, reply now. wechat_typing on, wechat_send(to_user_id=from_user_id, text=reply), wechat_typing off. Do not getupdates. Call wechat_inbox only if text is missing.";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AcceptedDm {

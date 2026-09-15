@@ -20,7 +20,7 @@ export const PATH_NOTIFY_STOP = "/ilink/bot/msg/notifystop";
 export const TYPING = { ON: 1, OFF: 2 };
 export const LONG_POLL_MS = 35_000;
 export const WAKE_REPLY_INSTRUCTION =
-  "Webhook already has the DM. Immediately wechat_typing on, wechat_send(to_user_id=from_user_id, text=reply), wechat_typing off. Do not getupdates. Call wechat_inbox only if text is missing.";
+  "Idle uses 0 model tokens; do not sleep the bot to save tokens. This payload already has the DM. If you are already running, reply now. wechat_typing on, wechat_send(to_user_id=from_user_id, text=reply), wechat_typing off. Do not getupdates. Call wechat_inbox only if text is missing.";
 
 export const MSG_TYPE = { NONE: 0, USER: 1, BOT: 2 };
 export const MSG_STATE = { NEW: 0, GENERATING: 1, FINISH: 2 };

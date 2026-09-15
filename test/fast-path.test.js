@@ -46,6 +46,7 @@ test("wake POST carries DM so the woken assistant can send without inbox", async
   assert.equal(body.text, expected.text);
   assert.equal(body.context_token, expected.context_token);
   assert.ok(body.instruction);
+  assert.match(body.instruction, /0 model tokens/);
 
   const built = buildWakePost({ url: "https://wake.example.invalid/hook", key: "k" }, expected);
   assert.equal(JSON.parse(built.body).reply_now, true);

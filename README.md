@@ -20,7 +20,7 @@
 
 1. **Webhook Routine**（例：「微信入站唤醒」）— 唤醒后若 webhook 已有正文：`wechat_typing on` → 模型回复 → `wechat_send` → typing off；没有正文才 `wechat_inbox` drain
 2. 从 Routine 面板复制 **URL + sender key**，一次性交给 `wechat_set_wake`
-3. **保活 Routine**（`@every 5m`）只调 `wechat_start_monitor`；绑定后也立刻手动开一次。常驻长轮询是独立进程：有 Rust 编译产物则用之（`npm run monitor:build`），否则回退 `node server/index.js --monitor`。MCP / 扫码 / 回复仍是 Node（Grok Bot 入口）。回微信的慢不在 Node HTTP，而在助手冷启动和模型。
+3. **立刻 `wechat_start_monitor`**（独立 OS 进程，空闲 **0 token**）。不要为了省 token 让 Bot 睡，也不要用「每 5 分钟喊模型」当主保活。Webhook 只是主机把会话卸掉时的退路。有 Rust 产物用 Rust（`npm run monitor:build`），否则 `node server/index.js --monitor`。
 
 ## Tools
 
